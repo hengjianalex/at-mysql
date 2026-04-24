@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "at-mysql": {
+      "command": "/usr/bin/env",
+      "args": [
+        "python",
+        "-m",
+        "src.server"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/alex.tu/Documents/10 MCP/at-mysql",
+        "PROJECT_ROOT": "/Users/alex.tu/Documents/10 MCP/at-mysql"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "YIFEI": {
+      "host": "sh-cynosdbmysql-grp-ho336kds.sql.tencentcdb.com",
+      "port": 27271,
+      "user": "root",
+      "password": "P@ssword1!",
+      "database": "hro",
+      "charset": "utf8mb4"
+    },
+    "YUNYAN_OB": {
+      "host": "sh-cynosdbmysql-grp-2uw0q4ik.sql.tencentcdb.com",
+      "port": 25603,
+      "user": "root",
+      "password": "P@ssword1!",
+      "database": "hrssc",
+      "charset": "utf8mb4"
+    }
+  }
+}
