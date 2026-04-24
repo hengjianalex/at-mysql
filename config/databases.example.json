@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "YIFEI": {
+      "host": "your-host-1",
+      "port": 3306,
+      "user": "your-username",
+      "password": "your-password",
+      "database": "your-database",
+      "charset": "utf8mb4"
+    },
+    "YUNYAN_OB": {
+      "host": "your-host-2",
+      "port": 3306,
+      "user": "your-username",
+      "password": "your-password",
+      "database": "your-database",
+      "charset": "utf8mb4"
+    }
+  }
+}
