@@ -204,7 +204,7 @@ def mask_sensitive_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return df
     
     # 字段归类
-    names = ['emp_name', 'full_name', 'user_point_name', 'recruiter_name']
+    names = ['emp_name', 'full_name', 'user_point_name']
     ids = ['id_number']
     mobiles = ['mobile', 'phone']
     companies = ['customer_name', 'account_name', 'social_security_entity', 

@@ -1,7 +1,7 @@
 """
 MCP Server 主程序 (FastMCP 方式)
 
-提供 MySQL 查询的 MCP 工具，数据清洗、丰富、分析
+提供MySQL查询和Excel导出的MCP工具
 """
 
 import logging
@@ -15,20 +15,32 @@ from mcp.server.fastmcp import FastMCP
 
 from .core import path_manager, get_config, db_manager
 from .tools import (
-    execute_sql, list_tables as list_tables_impl, get_table_schema as get_schema_impl,
-    read_table as read_table_impl, get_server_info,
+    execute_sql,
+    list_tables as list_tables_impl,
+    get_table_schema as get_schema_impl,
+    read_table as read_table_impl,
+    get_server_info,
     cache_data as cache_data_impl,
     enrich_derived_features,
-    mask_sensitive_data as mask_sensitive_data_impl
+    account_bill_download as download_account_bill,
+    mask_sensitive_data as mask_sensitive_data_impl,
+    get_account_bill_data,
+    get_policy_by_city,
+    get_employee_info,
+    write_to_excel,
+    load_template,
+    social_security_predict,
+    social_security_calculate as calculate_social_security,
+    salary_calculator,
 )
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("mcp_agent_server")
 
 mcp = FastMCP("mcp-mysql-excel")
+
 
 @mcp.tool()
 async def get_current_datetime() -> str:
@@ -45,19 +57,19 @@ async def get_current_datetime() -> str:
         - 用于 asOfDate 参数的默认值
     """
     now = datetime.now()
-    current_date = now.strftime('%Y-%m-%d')
-    current_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+    current_date = now.strftime("%Y-%m-%d")
+    current_datetime = now.strftime("%Y-%m-%dT%H:%M:%S")
 
-    return json.dumps({
-        "current_date": current_date,
-        "current_datetime": current_datetime
-    }, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {"current_date": current_date, "current_datetime": current_datetime},
+        ensure_ascii=False,
+        indent=2,
+    )
+
 
 @mcp.tool()
 async def analyze_cached_data(
-    operation: str,
-    group_by: Optional[str] = None,
-    target_col: Optional[str] = None
+    operation: str, group_by: Optional[str] = None, target_col: Optional[str] = None
 ) -> str:
     """
     对上一步 MySQL_OB 或 MySQL_Yifei 查询到的缓存数据执行 Pandas 分析。
@@ -79,86 +91,124 @@ async def analyze_cached_data(
     # 直接导入并使用底层实现
     from .tools.data_tools import CACHED_DF
     import numpy as np
-    
+
     if CACHED_DF is None or CACHED_DF.empty:
-        return json.dumps({
-            "status": "error",
-            "message": "当前内存中没有已缓存的数据。请先调用 MySQL_OB 或 MySQL_Yifei 查询数据。"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "当前内存中没有已缓存的数据。请先调用 MySQL_OB 或 MySQL_Yifei 查询数据。",
+            },
+            ensure_ascii=False,
+        )
 
     try:
-        if operation == 'status':
-            return json.dumps({
-                "status": "success",
-                "cached": True,
-                "count": len(CACHED_DF),
-                "columns": list(CACHED_DF.columns)
-            }, ensure_ascii=False)
+        if operation == "status":
+            return json.dumps(
+                {
+                    "status": "success",
+                    "cached": True,
+                    "count": len(CACHED_DF),
+                    "columns": list(CACHED_DF.columns),
+                },
+                ensure_ascii=False,
+            )
 
-        elif operation == 'describe':
-            result = CACHED_DF.describe(include='all')
+        elif operation == "describe":
+            result = CACHED_DF.describe(include="all")
             res = result.to_csv()
 
-        elif operation == 'value_counts' and group_by:
+        elif operation == "value_counts" and group_by:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
             res = CACHED_DF[group_by].value_counts().reset_index().to_csv(index=False)
 
-        elif operation == 'count' and group_by:
+        elif operation == "count" and group_by:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
-            res = CACHED_DF.groupby(group_by).size().reset_index(name='count').to_csv(index=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
+            res = (
+                CACHED_DF.groupby(group_by)
+                .size()
+                .reset_index(name="count")
+                .to_csv(index=False)
+            )
 
-        elif operation in ['sum', 'mean'] and group_by and target_col:
+        elif operation in ["sum", "mean"] and group_by and target_col:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"分组字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"分组字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
             if target_col not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"目标字段 '{target_col}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"目标字段 '{target_col}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
 
-            CACHED_DF[target_col] = pd.to_numeric(CACHED_DF[target_col], errors='coerce')
-            if operation == 'sum':
-                res = CACHED_DF.groupby(group_by)[target_col].sum().reset_index().to_csv(index=False)
+            CACHED_DF[target_col] = pd.to_numeric(
+                CACHED_DF[target_col], errors="coerce"
+            )
+            if operation == "sum":
+                res = (
+                    CACHED_DF.groupby(group_by)[target_col]
+                    .sum()
+                    .reset_index()
+                    .to_csv(index=False)
+                )
             else:
-                res = CACHED_DF.groupby(group_by)[target_col].mean().reset_index().to_csv(index=False)
+                res = (
+                    CACHED_DF.groupby(group_by)[target_col]
+                    .mean()
+                    .reset_index()
+                    .to_csv(index=False)
+                )
 
         else:
-            return json.dumps({
-                "status": "error",
-                "message": f"未知的操作类型 '{operation}' 或参数缺失。对于 sum/mean 需要同时指定 group_by 和 target_col。"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"未知的操作类型 '{operation}' 或参数缺失。对于 sum/mean 需要同时指定 group_by 和 target_col。",
+                },
+                ensure_ascii=False,
+            )
 
-        return json.dumps({
-            "status": "success",
-            "operation": operation,
-            "data_count": len(CACHED_DF),
-            "result": res
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "operation": operation,
+                "data_count": len(CACHED_DF),
+                "result": res,
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"数据分析执行异常：{e}")
-        return json.dumps({
-            "status": "error",
-            "message": f"分析执行异常：{str(e)}"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"status": "error", "message": f"分析执行异常：{str(e)}"},
+            ensure_ascii=False,
+        )
 
 
 @mcp.tool()
-async def MySQL_OB(
-    query: str,
-    max_rows: int = 10000
-) -> str:
+async def MySQL_OB(query: str, max_rows: int = 10000) -> str:
     """
     执行SQL查询语句（使用YUNYAN_OB服务器）。
 
@@ -173,74 +223,81 @@ async def MySQL_OB(
 
     try:
         result_dict = json.loads(result)
-        
+
         if result_dict.get("status") != "success":
             return result
-        
+
         data = result_dict.get("data")
         if not data:
             return result
-        
+
         df = pd.DataFrame(data)
-        
+
         df = enrich_derived_features(df)
-        enriched_data = df.fillna("").to_dict(orient='records')
-        
+        enriched_data = df.fillna("").to_dict(orient="records")
+
         cache_data_impl(enriched_data)
-        
+
         df_masked = mask_sensitive_data_impl(df.copy())
-        masked_records = df_masked.fillna("").to_dict(orient='records')
-        
+        masked_records = df_masked.fillna("").to_dict(orient="records")
+
         count = len(masked_records)
-        
+
         if count <= 50:
-            return json.dumps({
-                "mode": "detail",
-                "count": count,
-                "data": masked_records
-            }, indent=2, ensure_ascii=False)
-        
-        return json.dumps({
-            "mode": "analysis_portrait",
-            "total_records_captured": count,
-            "available_columns": list(df.columns),
-            "data_sample_head1": df_masked.fillna("").head(1).to_dict(orient='records'),
-            "instruction": "数据已缓存。你可以使用 available_columns 中的字段调用 'analyze_cached_data' 进行聚合统计。"
-        }, ensure_ascii=False, indent=2)
-        
+            return json.dumps(
+                {"mode": "detail", "count": count, "data": masked_records},
+                indent=2,
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "mode": "analysis_portrait",
+                "total_records_captured": count,
+                "available_columns": list(df.columns),
+                "data_sample_head1": df_masked.fillna("")
+                .head(1)
+                .to_dict(orient="records"),
+                "instruction": "数据已缓存。你可以使用 available_columns 中的字段调用 'analyze_cached_data' 进行聚合统计。",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     except Exception as e:
         logger.warning(f"处理逻辑异常，执行降级脱敏输出: {e}")
         try:
             result_dict = json.loads(result)
             data = result_dict.get("data", [])
             cache_data_impl(data)
-            
+
             df_fallback = pd.DataFrame(data)
             df_fallback_masked = mask_sensitive_data_impl(df_fallback)
-            masked_data = df_fallback_masked.fillna("").to_dict(orient='records')
-            
+            masked_data = df_fallback_masked.fillna("").to_dict(orient="records")
+
             if len(masked_data) <= 50:
-                return json.dumps({
-                    "mode": "detail",
-                    "count": len(masked_data),
-                    "data": masked_data
-                }, ensure_ascii=False, indent=2)
+                return json.dumps(
+                    {"mode": "detail", "count": len(masked_data), "data": masked_data},
+                    ensure_ascii=False,
+                    indent=2,
+                )
             else:
-                return json.dumps({
-                    "mode": "analysis_portrait",
-                    "total_records_captured": len(masked_data),
-                    "data_sample_head1": masked_data[:1],
-                    "instruction": "数据已缓存（部分处理失败）。"
-                }, ensure_ascii=False, indent=2)
+                return json.dumps(
+                    {
+                        "mode": "analysis_portrait",
+                        "total_records_captured": len(masked_data),
+                        "data_sample_head1": masked_data[:1],
+                        "instruction": "数据已缓存（部分处理失败）。",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
         except:
             return result
 
 
 @mcp.tool()
-async def MySQL_Yifei(
-    query: str,
-    max_rows: int = 10000
-) -> str:
+async def MySQL_Yifei(query: str, max_rows: int = 10000) -> str:
     """
     执行SQL查询语句（使用YIFEI服务器）。
 
@@ -255,65 +312,75 @@ async def MySQL_Yifei(
 
     try:
         result_dict = json.loads(result)
-        
+
         if result_dict.get("status") != "success":
             return result
-        
+
         data = result_dict.get("data")
         if not data:
             return result
-        
+
         df = pd.DataFrame(data)
-        
+
         df = enrich_derived_features(df)
-        enriched_data = df.fillna("").to_dict(orient='records')
-        
+        enriched_data = df.fillna("").to_dict(orient="records")
+
         cache_data_impl(enriched_data)
-        
+
         df_masked = mask_sensitive_data_impl(df.copy())
-        masked_records = df_masked.fillna("").to_dict(orient='records')
-        
+        masked_records = df_masked.fillna("").to_dict(orient="records")
+
         count = len(masked_records)
-        
+
         if count <= 50:
-            return json.dumps({
-                "mode": "detail",
-                "count": count,
-                "data": masked_records
-            }, indent=2, ensure_ascii=False)
-        
-        return json.dumps({
-            "mode": "analysis_portrait",
-            "total_records_captured": count,
-            "available_columns": list(df.columns),
-            "data_sample_head1": df_masked.fillna("").head(1).to_dict(orient='records'),
-            "instruction": "数据已缓存。你可以使用 available_columns 中的字段调用 'analyze_cached_data' 进行聚合统计。"
-        }, ensure_ascii=False, indent=2)
-        
+            return json.dumps(
+                {"mode": "detail", "count": count, "data": masked_records},
+                indent=2,
+                ensure_ascii=False,
+            )
+
+        return json.dumps(
+            {
+                "mode": "analysis_portrait",
+                "total_records_captured": count,
+                "available_columns": list(df.columns),
+                "data_sample_head1": df_masked.fillna("")
+                .head(1)
+                .to_dict(orient="records"),
+                "instruction": "数据已缓存。你可以使用 available_columns 中的字段调用 'analyze_cached_data' 进行聚合统计。",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     except Exception as e:
         logger.warning(f"处理逻辑异常，执行降级脱敏输出: {e}")
         try:
             result_dict = json.loads(result)
             data = result_dict.get("data", [])
             cache_data_impl(data)
-            
+
             df_fallback = pd.DataFrame(data)
             df_fallback_masked = mask_sensitive_data_impl(df_fallback)
-            masked_data = df_fallback_masked.fillna("").to_dict(orient='records')
-            
+            masked_data = df_fallback_masked.fillna("").to_dict(orient="records")
+
             if len(masked_data) <= 50:
-                return json.dumps({
-                    "mode": "detail",
-                    "count": len(masked_data),
-                    "data": masked_data
-                }, ensure_ascii=False, indent=2)
+                return json.dumps(
+                    {"mode": "detail", "count": len(masked_data), "data": masked_data},
+                    ensure_ascii=False,
+                    indent=2,
+                )
             else:
-                return json.dumps({
-                    "mode": "analysis_portrait",
-                    "total_records_captured": len(masked_data),
-                    "data_sample_head1": masked_data[:1],
-                    "instruction": "数据已缓存（部分处理失败）。"
-                }, ensure_ascii=False, indent=2)
+                return json.dumps(
+                    {
+                        "mode": "analysis_portrait",
+                        "total_records_captured": len(masked_data),
+                        "data_sample_head1": masked_data[:1],
+                        "instruction": "数据已缓存（部分处理失败）。",
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
         except:
             return result
 
@@ -330,10 +397,7 @@ async def list_tables(server_id: Optional[str] = None) -> str:
 
 
 @mcp.tool()
-async def get_table_schema(
-    table: str,
-    server_id: Optional[str] = None
-) -> str:
+async def get_table_schema(table: str, server_id: Optional[str] = None) -> str:
     """
     获取指定表的结构信息（字段名、类型等）。
 
@@ -346,10 +410,7 @@ async def get_table_schema(
 
 @mcp.tool()
 async def read_table(
-    table: str,
-    server_id: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0
+    table: str, server_id: Optional[str] = None, limit: int = 100, offset: int = 0
 ) -> str:
     """
     读取表中的数据，支持分页。
@@ -363,6 +424,87 @@ async def read_table(
     return read_table_impl(table=table, server_id=server_id, limit=limit, offset=offset)
 
 
+# @mcp.tool()
+# async def write_excel(
+#     filename: str,
+#     data: Any,
+#     sheet_name: str = "Sheet1"
+# ) -> str:
+#     """
+#     将数据写入Excel文件。
+
+#     Args:
+#         filename: 文件名（如 report.xlsx）
+#         data: 数据，支持两种格式：
+#               1) {column: [values]} 列格式
+#               2) [{field: value}, ...] 记录格式
+#         sheet_name: Sheet名称，默认Sheet1
+#     """
+#     return write_excel(filename=filename, data=data, sheet_name=sheet_name)
+
+
+# @mcp.tool()
+# async def write_excel_multi(
+#     filename: str,
+#     sheets_data: Dict[str, Any]
+# ) -> str:
+#     """
+#     将多个数据集写入同一Excel文件的不同Sheet。
+
+#     Args:
+#         filename: 文件名
+#         sheets_data: {sheet_name: data} 字典
+#     """
+#     return write_excel_multi(filename=filename, sheets_data=sheets_data)
+
+
+@mcp.tool()
+async def account_bill_download(company_name: str, cost_time: str) -> str:
+    """
+    下载指定公司在指定月份的社保账单明细 Excel 文件。
+
+    Args:
+        company_name: 客户公司核心名称。
+            注意：请提取用户提到的公司主体，去掉"公司"、"有限公司"、"集团"等后缀。
+            示例：用户说"三好公司"，此处应输入"三好"；用户说"阿里巴巴集团"，此处输入"阿里巴巴"。
+        cost_time: 账单查询月份。
+            格式要求：必须为 YYYY-MM 格式。
+            示例：用户说"2026 年 3 月"或"3 月"，请转化为"2026-03"；用户说"去年 12 月"，请转化为"2025-12"。
+
+    Returns:
+        JSON 格式的账单生成结果
+    """
+    return download_account_bill(company_name=company_name, cost_time=cost_time)
+
+
+@mcp.tool()
+async def social_security_calculate(
+    account_name: str, simulate_type: str = "synth", separated_radix: bool = False
+) -> str:
+    """
+        社保明细精确计算
+
+        根据社保账户名称和模拟类型，模拟员工并计算社保公积金明细。
+
+        Args:
+            account_name: 社保账户名称
+            simulate_type: 模拟类型
+                - "min": 社保下限（申报工资 = 社保下限）
+                - "max": 社保上限（申报工资 = 社保上限）
+                - "avg": 社保平均（申报工资 = 社保平均值）
+                - "synth": 综合（模拟三人：下限、平均、上限）
+            separated_radix: 是否分基数（默认 False）
+                - False: 统一基数，公司和个人使用相同上下限
+                - True: 分基数，公司和个人使用各自上下限
+
+    Returns:
+            JSON 格式的计算结果
+    """
+    return calculate_social_security(
+        account_name=account_name,
+        simulate_type=simulate_type,
+        separated_radix=separated_radix,
+    )
 
 
 @mcp.resource("mysql://{server_id}/{database}/{table}")
@@ -383,20 +525,21 @@ async def get_table_resource(server_id: str, database: str, table: str) -> str:
         schema = db_manager.get_table_schema(table, server_id)
         data = db_manager.get_table_data(table, server_id, limit=100)
 
-        return json.dumps({
-            "server_id": server_id,
-            "database": database,
-            "table": table,
-            "schema": schema,
-            "data": data,
-            "count": len(data)
-        }, ensure_ascii=False, indent=2)
+        return json.dumps(
+            {
+                "server_id": server_id,
+                "database": database,
+                "table": table,
+                "schema": schema,
+                "data": data,
+                "count": len(data),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
     except Exception as e:
         logger.error(f"读取资源失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
 def main():
@@ -408,7 +551,9 @@ def main():
     print(f"输出目录: {path_manager.output_dir}", file=sys.stderr)
 
     if not config.list_servers():
-        print("警告: 未配置任何MySQL服务器，请检查 config/databases.json", file=sys.stderr)
+        print(
+            "警告: 未配置任何MySQL服务器，请检查 config/databases.json", file=sys.stderr
+        )
 
     mcp.run()
 
