@@ -19,19 +19,11 @@ from .tools import (
     list_tables as list_tables_impl,
     get_table_schema as get_schema_impl,
     read_table as read_table_impl,
-    get_server_info,
     cache_data as cache_data_impl,
     enrich_derived_features,
     account_bill_download as download_account_bill,
     mask_sensitive_data as mask_sensitive_data_impl,
-    get_account_bill_data,
-    get_policy_by_city,
-    get_employee_info,
-    write_to_excel,
-    load_template,
-    social_security_predict,
-    social_security_calculate as calculate_social_security,
-    salary_calculator,
+    social_details_calculate,
 )
 
 logging.basicConfig(
@@ -424,40 +416,6 @@ async def read_table(
     return read_table_impl(table=table, server_id=server_id, limit=limit, offset=offset)
 
 
-# @mcp.tool()
-# async def write_excel(
-#     filename: str,
-#     data: Any,
-#     sheet_name: str = "Sheet1"
-# ) -> str:
-#     """
-#     将数据写入Excel文件。
-
-#     Args:
-#         filename: 文件名（如 report.xlsx）
-#         data: 数据，支持两种格式：
-#               1) {column: [values]} 列格式
-#               2) [{field: value}, ...] 记录格式
-#         sheet_name: Sheet名称，默认Sheet1
-#     """
-#     return write_excel(filename=filename, data=data, sheet_name=sheet_name)
-
-
-# @mcp.tool()
-# async def write_excel_multi(
-#     filename: str,
-#     sheets_data: Dict[str, Any]
-# ) -> str:
-#     """
-#     将多个数据集写入同一Excel文件的不同Sheet。
-
-#     Args:
-#         filename: 文件名
-#         sheets_data: {sheet_name: data} 字典
-#     """
-#     return write_excel_multi(filename=filename, sheets_data=sheets_data)
-
-
 @mcp.tool()
 async def account_bill_download(company_name: str, cost_time: str) -> str:
     """
@@ -478,32 +436,23 @@ async def account_bill_download(company_name: str, cost_time: str) -> str:
 
 
 @mcp.tool()
-async def social_security_calculate(
-    account_name: str, simulate_type: str = "synth", separated_radix: bool = False
+async def social_policy_calculate(
+    city_name: str, account_name: Optional[str] = None, simulate_type: str = "synth"
 ) -> str:
     """
-        社保明细精确计算
+    城市社保明成本明细测算，计算指定城市、社保账户(可选）的社保明细。
 
-        根据社保账户名称和模拟类型，模拟员工并计算社保公积金明细。
-
-        Args:
-            account_name: 社保账户名称
-            simulate_type: 模拟类型
-                - "min": 社保下限（申报工资 = 社保下限）
-                - "max": 社保上限（申报工资 = 社保上限）
-                - "avg": 社保平均（申报工资 = 社保平均值）
-                - "synth": 综合（模拟三人：下限、平均、上限）
-            separated_radix: 是否分基数（默认 False）
-                - False: 统一基数，公司和个人使用相同上下限
-                - True: 分基数，公司和个人使用各自上下限
+    Args:
+        city_name: 城市名称（需要测算的城市，例如"北京"、"上海"等）。
+        account_name: 社保账户名称（可选）。
 
     Returns:
-            JSON 格式的计算结果
+        JSON 格式的账单生成结果
     """
-    return calculate_social_security(
-        account_name=account_name,
+
+    return social_details_calculate(
+        city_name=city_name, account_name=account_name or "",
         simulate_type=simulate_type,
-        separated_radix=separated_radix,
     )
 
 

@@ -126,42 +126,28 @@ def calculate_precise_detail(
         "申报工资": float(declare_salary),
     }
 
-    other_map = {
-        "养老保险": "养老",
-        "养老保险(深户)": "养老",
-        "养老保险(非深户)": "养老",
-        "养老保险（深户）": "养老",
-        "养老保险（非深户）": "养老",
-        "医疗保险(含生育)": "医疗",
-        "医疗保险（含生育）": "医疗",
-        "医疗保险（一档）": "医疗",
-        "医疗保险（二档）": "医疗",
-        "医疗保险": "医疗",
-        "补充医疗（地方附加）": "医疗",
-        "医疗保险(一档)": "医疗",
-        "医疗保险(二档)": "医疗",
-        "医疗保险（一档）": "医疗",
-        "医疗保险（二档）": "医疗",
-        "失业保险": "失业",
-        "失业保险（农民工）": "失业",
-        "工伤保险": "工伤",
-        "生育保险": "生育",
-        "大额医疗费用补助": "大额医疗",
-        "大额医疗补助": "大额医疗",
-        "大病医疗保险": "大额医疗",
-        "长期护理保险": "长期护理",
-        "长期护理险": "长期护理",
-        "补充医疗": "补充医疗",
-        "补充医疗保险": "补充医疗",
+    item_code_map = {
+        "1010": "养老",
+        "1020": "医疗",
+        "1030": "生育",
+        "1040": "失业",
+        "1050": "工伤",
+        "1060": "大额医疗",
+        "1070": "长期护理",
+        "1080": "补充医疗",
+        "2010": "公积金",
+        "2020": "补充公积金",
     }
     fund_types = ["公积金", "补充公积金"]
 
-    processed_types = set()
+    summary_by_item_code = {}
 
     for p in policy:
         insurance_name = str(p.get("insurance_name", ""))
         insurance_type = str(p.get("insurance_type", ""))
-
+        insurance_payment_type = str(p.get("insurance_payment_type", ""))
+        item_code = str(p.get("item_code", ""))
+        
         min_radix = to_decimal(p.get("employee_min_radix")) or to_decimal(
             p.get("min_radix")
         )
@@ -200,8 +186,7 @@ def calculate_precise_detail(
 
         # 计算金额
         rounding_mode = str(p.get("rounding_mode", "1"))
-        # 如果有固定金额，使用固定金额
-        if company_pay > 0 or employee_pay > 0:
+        if insurance_payment_type == "2":
             company_amount = Decimal(str(company_pay))
             employee_amount = Decimal(str(employee_pay))
         else:
@@ -214,65 +199,64 @@ def calculate_precise_detail(
 
         # 分类处理
         if insurance_name in fund_types:
-            # 公积金类：分开显示（不合并）
             type_name = "补充公积金" if "补充" in insurance_name else "公积金"
             result[f"{type_name}基数"] = float(base)
             result[f"企业{type_name}比例"] = company_ratio
             result[f"个人{type_name}比例"] = employee_ratio
             result[f"{type_name}公司"] = float(company_amount)
             result[f"{type_name}个人"] = float(employee_amount)
+            if item_code not in summary_by_item_code:
+                summary_by_item_code[item_code] = {
+                    "公司": float(company_amount),
+                    "个人": float(employee_amount),
+                }
 
-        elif insurance_name in other_map:
-            type_name = other_map[insurance_name]
-            if type_name in processed_types:
-                continue
-            processed_types.add(type_name)
+        elif item_code in item_code_map:
+            type_name = item_code_map[item_code]
             result[f"{type_name}基数"] = float(base)
             result[f"企业{type_name}比例"] = company_ratio
             result[f"个人{type_name}比例"] = employee_ratio
             result[f"{type_name}公司"] = float(company_amount)
             result[f"{type_name}个人"] = float(employee_amount)
+            if item_code not in summary_by_item_code:
+                summary_by_item_code[item_code] = {
+                    "公司": float(company_amount),
+                    "个人": float(employee_amount),
+                }
 
-    # 计算合计（所有险种单独显示，合计也单独列出）
-    result["社保公司合计"] = (
-        result.get("养老公司", 0)
-        + result.get("医疗公司", 0)
-        + result.get("失业公司", 0)
-        + result.get("工伤公司", 0)
-        + result.get("生育公司", 0)
-        + result.get("大额医疗公司", 0)
-        + result.get("长期护理公司", 0)
-        + result.get("补充医疗公司", 0)
-    )
-    result["社保个人合计"] = (
-        result.get("养老个人", 0)
-        + result.get("医疗个人", 0)
-        + result.get("失业个人", 0)
-        + result.get("工伤个人", 0)
-        + result.get("生育个人", 0)
-        + result.get("大额医疗个人", 0)
-        + result.get("长期护理个人", 0)
-        + result.get("补充医疗个人", 0)
-    )
-    result["公积金公司合计"] = result.get("公积金公司", 0) + result.get(
-        "补充公积金公司", 0
-    )
-    result["公积金个人合计"] = result.get("公积金个人", 0) + result.get(
-        "补充公积金个人", 0
-    )
-    result["企业合计"] = result.get("社保公司合计", 0) + result.get("公积金公司合计", 0)
-    result["个人合计"] = result.get("社保个人合计", 0) + result.get("公积金个人合计", 0)
+    # 计算合计（按 item_code 去重）
+    social_company_total = 0
+    social_employee_total = 0
+    fund_company_total = 0
+    fund_employee_total = 0
+
+    for item_code, amounts in summary_by_item_code.items():
+        if item_code in ["1010", "1020", "1030", "1040", "1050", "1060", "1070", "1080"]:
+            social_company_total += amounts["公司"]
+            social_employee_total += amounts["个人"]
+        elif item_code in ["2010", "2020"]:
+            fund_company_total += amounts["公司"]
+            fund_employee_total += amounts["个人"]
+
+    result["社保公司合计"] = social_company_total
+    result["社保个人合计"] = social_employee_total
+    result["公积金公司合计"] = fund_company_total
+    result["公积金个人合计"] = fund_employee_total
+    result["企业合计"] = social_company_total + fund_company_total
+    result["个人合计"] = social_employee_total + fund_employee_total
 
     return result
 
 
-def social_security_calculate(account_name: str, simulate_type: str = "synth") -> str:
-    """社保明细精确计算"""
+def social_details_calculate(city_name: str, account_name: Optional[str] = None, simulate_type: str = "synth") -> str:
+    """
+    城市社保明成本明细测算，计算指定城市、社保账户(可选）的社保明细。
+    """
     try:
         # 1. 获取账户信息
         from .data_reader import get_account_info, get_policy_by_city
 
-        account_info = get_account_info(account_name=account_name)
+        account_info = get_account_info(city_name=city_name, account_name=account_name or "")
         if not account_info:
             return json.dumps(
                 {
@@ -351,5 +335,5 @@ __all__ = [
     "merge_account_policy",
     "generate_simulated_employees",
     "calculate_precise_detail",
-    "social_security_calculate",
+    "social_details_calculate",
 ]

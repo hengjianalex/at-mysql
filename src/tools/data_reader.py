@@ -278,7 +278,7 @@ def get_policy_by_city(
                 city.id AS city_id,
                 insc.code AS insurance_code, 
                 insc.name AS insurance_name, 
-                insc.payment_type as payment_type,
+                insc.payment_type as insurance_payment_type,
                 his.adjust_serial, 
                 his.start_time, 
                 his.min_radix, 

@@ -29,7 +29,7 @@ from .excel_writer import (
     load_template,
 )
 from .prediction_tools import social_security_predict
-from .calculation_tools import social_security_calculate
+from .calculation_tools import social_details_calculate
 from .salary_tools import salary_calculator
 
 __all__ = [
@@ -49,8 +49,7 @@ __all__ = [
     "get_account_info",
     "write_to_excel",
     "load_template",
-    "social_security_predict",
-    "social_security_calculate",
+    "social_details_calculate",
     "salary_calculator",
 ]
 
