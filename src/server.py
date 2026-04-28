@@ -9,7 +9,20 @@ import sys
 import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-import pandas as pd
+from datetime import datetime, date
+
+def convert_decimal(obj):
+    """递归将 Decimal 和 datetime 转换为可序列化的格式"""
+    from decimal import Decimal
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: convert_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_decimal(item) for item in obj]
+    return obj
 
 from mcp.server.fastmcp import FastMCP
 
@@ -24,6 +37,8 @@ from .tools import (
     account_bill_download as download_account_bill,
     mask_sensitive_data as mask_sensitive_data_impl,
     social_details_calculate,
+    get_account_info,
+    get_policy_by_city
 )
 
 logging.basicConfig(
@@ -451,7 +466,7 @@ async def social_policy_calculate(
     """
 
     return social_details_calculate(
-        city_name=city_name, account_name=account_name or "",
+        city_name=city_name, account_name=account_name,
         simulate_type=simulate_type,
     )
 
@@ -509,3 +524,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # import asyncio
+    
+    # async def test_social_policy_calculate():
+    #     print("=== 测试 social_policy_calculate ===")
+        
+    #     # 测试调用
+    #     result = await social_policy_calculate(city_name="深圳")
+    #     print("结果:", result)
+        
+    #     # 你可以继续添加更多测试...
+    #     result = await social_policy_calculate(city_name="北京", account_name="北京立业幸福智慧科技有限公司")
+    #     print("结果:", result)
+        
+    # asyncio.run(test_social_policy_calculate())
