@@ -11,6 +11,34 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("mcp_agent.tools.calculation")
 
+INSURANCE_NAME_TO_CODE = {
+    "养老保险": "1010",
+    "医疗保险": "1020",
+    "生育保险": "1030",
+    "失业保险": "1040",
+    "工伤保险": "1050",
+    "大额医疗": "1060",
+    "公积金": "2010",
+    "补充公积金": "2020",
+}
+
+
+def get_insurance_code(insurance_name: str) -> Optional[str]:
+    """获取保险类型代码，支持带括号的保险名称"""
+    if not insurance_name:
+        return None
+
+    # 先精确匹配
+    if insurance_name in INSURANCE_NAME_TO_CODE:
+        return INSURANCE_NAME_TO_CODE[insurance_name]
+
+    # 处理带括号的保险名称，如"养老保险(深户)" -> "养老保险"
+    for key in INSURANCE_NAME_TO_CODE:
+        if insurance_name.startswith(key):
+            return INSURANCE_NAME_TO_CODE[key]
+
+    return None
+
 
 def to_decimal(value: Any) -> Optional[Decimal]:
     """转换为 Decimal"""
@@ -54,19 +82,20 @@ def merge_account_policy(account_info: Dict, city_policy: List[Dict]) -> List[Di
     housing_fund_employee_ratio = account_info.get("housing_fund_employee_ratio")
 
     for p in account_policy:
-        item_code = str(p.get("item_code", ""))
+        insurance_name = p.get("insurance_name", "")
+        standard_item_code = get_insurance_code(insurance_name) or ""
 
-        if item_code == "1050" and work_injury_ratio is not None:
+        if standard_item_code == "1050" and work_injury_ratio is not None:
             p["company_ratio"] = work_injury_ratio
             p["employee_ratio"] = 0
 
-        if item_code == "2010":
+        if standard_item_code == "2010":
             if housing_fund_company_ratio is not None:
                 p["company_ratio"] = housing_fund_company_ratio
             if housing_fund_employee_ratio is not None:
                 p["employee_ratio"] = housing_fund_employee_ratio
 
-        if item_code == "2020":
+        if standard_item_code == "2020":
             if housing_fund_company_ratio is not None:
                 p["company_ratio"] = housing_fund_company_ratio
             if housing_fund_employee_ratio is not None:
@@ -78,7 +107,7 @@ def merge_account_policy(account_info: Dict, city_policy: List[Dict]) -> List[Di
 def generate_simulated_employees(
     policy: List[Dict], simulate_type: str
 ) -> List[Dict[str, Any]]:
-    pension_policies = [p for p in policy if p.get("item_code") == "1010"]
+    pension_policies = [p for p in policy if get_insurance_code(p.get("insurance_name", "")) == "1010"]
 
     if not pension_policies:
         return []
@@ -99,13 +128,13 @@ def generate_simulated_employees(
 
     avg_wage = (min_wage + max_wage) / 2
 
-    if simulate_type == "min":
+    if simulate_type in ("min", "下限"):
         return [{"姓名": "社保下限", "证件号码": "SIMULATED-001", "申报工资": min_wage}]
-    elif simulate_type == "max":
+    elif simulate_type in ("max", "上限"):
         return [{"姓名": "社保上限", "证件号码": "SIMULATED-002", "申报工资": max_wage}]
-    elif simulate_type == "avg":
+    elif simulate_type in ("avg", "average", "平均"):
         return [{"姓名": "社保平均", "证件号码": "SIMULATED-003", "申报工资": avg_wage}]
-    elif simulate_type == "synth":
+    elif simulate_type in ("synth", "综合"):
         return [
             {"姓名": "社保下限", "证件号码": "SIMULATED-001", "申报工资": min_wage},
             {"姓名": "社保平均", "证件号码": "SIMULATED-002", "申报工资": avg_wage},
@@ -198,45 +227,60 @@ def calculate_precise_detail(
             )
 
         # 分类处理
-        if insurance_name in fund_types:
+        if "公积金" in insurance_name:
             type_name = "补充公积金" if "补充" in insurance_name else "公积金"
             result[f"{type_name}基数"] = float(base)
             result[f"企业{type_name}比例"] = company_ratio
             result[f"个人{type_name}比例"] = employee_ratio
             result[f"{type_name}公司"] = float(company_amount)
             result[f"{type_name}个人"] = float(employee_amount)
-            if item_code not in summary_by_item_code:
-                summary_by_item_code[item_code] = {
+            if insurance_name not in summary_by_item_code:
+                summary_by_item_code[insurance_name] = {
                     "公司": float(company_amount),
                     "个人": float(employee_amount),
                 }
 
-        elif item_code in item_code_map:
-            type_name = item_code_map[item_code]
+        elif "养老保险" in insurance_name or "医疗保险" in insurance_name or "失业保险" in insurance_name or "工伤保险" in insurance_name or "生育保险" in insurance_name or "大额" in insurance_name:
+            # 从 insurance_name 提取险种类型
+            if "养老" in insurance_name:
+                type_name = "养老"
+            elif "医疗" in insurance_name:
+                type_name = "医疗"
+            elif "失业" in insurance_name:
+                type_name = "失业"
+            elif "工伤" in insurance_name:
+                type_name = "工伤"
+            elif "生育" in insurance_name:
+                type_name = "生育"
+            elif "大额" in insurance_name:
+                type_name = "大额医疗"
+            else:
+                type_name = insurance_name
+                
             result[f"{type_name}基数"] = float(base)
             result[f"企业{type_name}比例"] = company_ratio
             result[f"个人{type_name}比例"] = employee_ratio
             result[f"{type_name}公司"] = float(company_amount)
             result[f"{type_name}个人"] = float(employee_amount)
-            if item_code not in summary_by_item_code:
-                summary_by_item_code[item_code] = {
+            if insurance_name not in summary_by_item_code:
+                summary_by_item_code[insurance_name] = {
                     "公司": float(company_amount),
                     "个人": float(employee_amount),
                 }
 
-    # 计算合计（按 item_code 去重）
+    # 计算合计（按 insurance_name 去重）
     social_company_total = 0
     social_employee_total = 0
     fund_company_total = 0
     fund_employee_total = 0
 
-    for item_code, amounts in summary_by_item_code.items():
-        if item_code in ["1010", "1020", "1030", "1040", "1050", "1060", "1070", "1080"]:
-            social_company_total += amounts["公司"]
-            social_employee_total += amounts["个人"]
-        elif item_code in ["2010", "2020"]:
+    for name, amounts in summary_by_item_code.items():
+        if "公积金" in name:
             fund_company_total += amounts["公司"]
             fund_employee_total += amounts["个人"]
+        else:
+            social_company_total += amounts["公司"]
+            social_employee_total += amounts["个人"]
 
     result["社保公司合计"] = social_company_total
     result["社保个人合计"] = social_employee_total
@@ -256,7 +300,7 @@ def social_details_calculate(city_name: str, account_name: Optional[str] = None,
         # 1. 获取账户信息
         from .data_reader import get_account_info, get_policy_by_city
 
-        account_info = get_account_info(city_name=city_name, account_name=account_name or "")
+        account_info = get_account_info(city_name=city_name, account_name=account_name)
         if not account_info:
             return json.dumps(
                 {

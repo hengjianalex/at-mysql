@@ -256,7 +256,7 @@ def get_account_bill_data(company_name: str, cost_time: str) -> List[Dict[str, A
 
 
 def get_policy_by_city(
-    city_name: str, city_id: int, start_date: Optional[str] = None
+    city_name: str, city_id: Optional[int] = None, start_date: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     按城市查询社保政策
@@ -278,6 +278,7 @@ def get_policy_by_city(
                 city.id AS city_id,
                 insc.code AS insurance_code, 
                 insc.name AS insurance_name, 
+                insc.code AS item_code,
                 insc.payment_type as insurance_payment_type,
                 his.adjust_serial, 
                 his.start_time, 
@@ -312,7 +313,7 @@ def get_policy_by_city(
             ) AS his
             INNER JOIN soi_city_insurance AS insc ON his.insurance_id = insc.id 
             INNER JOIN soi_city_policy AS policy ON insc.policy_id = policy.id 
-            INNER JOIN hro_soi_city AS city ON policy.city_ids = city.id
+            INNER JOIN hro_soi_city AS city ON policy.city_ids = CONCAT(city.id)
             WHERE his.rn = 1
         """
 
@@ -321,7 +322,7 @@ def get_policy_by_city(
             query += " AND city.id = %s"
             params = (city_id,)
         else:
-            query += " AND (city.city_name REGEXP %s OR policy.name REGEXP %s)"
+            query += " AND (city.city_name LIKE CONCAT('%%', %s, '%%') OR policy.name LIKE CONCAT('%%', %s, '%%'))"
             params = (city_name, city_name)
         if start_date:
             params = (start_date,) + params
@@ -401,7 +402,7 @@ def get_employee_info(
 
 
 def get_account_info(
-    city_name: Optional[str] = None,
+    city_name: str,
     account_name: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -409,7 +410,7 @@ def get_account_info(
     根据社保账户查询社保账户基本信息，社保政策补充信息（工伤比例，公积金公司和个人比例），服务人数等信息
 
     Args:
-        city_name: 城市名称（可选，用于筛选政策城市）
+        city_name: 城市名称（用于筛选政策城市）
         account_name: 账户名称（可选）
     Returns:
         账户信息字典或 None
@@ -421,6 +422,7 @@ def get_account_info(
             acc.account_name, 
             acc.apply_id AS customer_id, 
             acc.agent_id, 
+            acc.city_id, 
             cc.name AS customer_name, 
             agent.name AS agent_name 
         FROM soi_account AS acc 
@@ -447,7 +449,7 @@ def get_account_info(
             FROM soi_acc_insurance WHERE item_code = '2010' 
         ), 
         t_city_policy AS ( 
-            SELECT id, name FROM soi_city_policy WHERE status = '1' 
+            SELECT id, name, city_ids FROM soi_city_policy WHERE status = '1' 
         ), 
         t_insured_count AS ( 
             SELECT account_id, COUNT(*) AS insured_count 
@@ -462,9 +464,9 @@ def get_account_info(
         FROM base AS b 
         LEFT JOIN t_work_injury tw ON b.account_id = tw.account_id 
         LEFT JOIN t_housing_fund th ON b.account_id = th.account_id 
-        LEFT JOIN t_city_policy cp ON tw.policy_id = cp.id 
+        LEFT JOIN t_city_policy cp ON CAST(b.city_id AS CHAR) = cp.city_ids COLLATE utf8mb4_general_ci
         LEFT JOIN t_insured_count ic ON b.account_id = ic.account_id 
-        WHERE 1=1
+        WHERE 1=1 
         """
 
         if city_name:
