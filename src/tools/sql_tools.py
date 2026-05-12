@@ -6,23 +6,26 @@ SQL工具模块
 
 import json
 import logging
+import sys
+import os
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
-from ..core.db_connection import db_manager
-from ..core.config_loader import get_config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from db.queries import execute_query, get_default_server_id
 
 logger = logging.getLogger("mcp_agent.tools.sql")
 
 
 class DateTimeEncoder(json.JSONEncoder):
     """JSON编码器，支持datetime、date和Decimal类型"""
+
     def default(self, obj):
         if isinstance(obj, datetime):
-            return obj.strftime('%Y-%m-%d %H:%M:%S')
+            return obj.strftime("%Y-%m-%d %H:%M:%S")
         if isinstance(obj, date):
-            return obj.strftime('%Y-%m-%d')
+            return obj.strftime("%Y-%m-%d")
         if isinstance(obj, Decimal):
             return float(obj)
         return super().default(obj)
@@ -35,9 +38,9 @@ def convert_to_json_serializable(data: Any) -> Any:
     elif isinstance(data, dict):
         return {key: convert_to_json_serializable(value) for key, value in data.items()}
     elif isinstance(data, datetime):
-        return data.strftime('%Y-%m-%d %H:%M:%S')
+        return data.strftime("%Y-%m-%d %H:%M:%S")
     elif isinstance(data, date):
-        return data.strftime('%Y-%m-%d')
+        return data.strftime("%Y-%m-%d")
     elif isinstance(data, Decimal):
         return float(data)
     else:
@@ -45,9 +48,7 @@ def convert_to_json_serializable(data: Any) -> Any:
 
 
 def execute_sql(
-    query: str,
-    server_id: Optional[str] = None,
-    max_rows: int = 1000
+    query: str, server_id: Optional[str] = None, max_rows: int = 1000
 ) -> str:
     """
     执行SQL查询并返回JSON结果
@@ -61,28 +62,26 @@ def execute_sql(
         JSON格式的查询结果
     """
     try:
-        results = db_manager.execute_query(query, server_id, max_rows=max_rows)
+        results = execute_query(query, server_id, max_rows=max_rows)
 
         if not results:
-            return json.dumps({
-                "status": "success",
-                "count": 0,
-                "data": []
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "success", "count": 0, "data": []}, ensure_ascii=False
+            )
 
-        return json.dumps({
-            "status": "success",
-            "server_id": server_id or get_config().get_default_server_id(),
-            "count": len(results),
-            "data": convert_to_json_serializable(results)
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "server_id": server_id or get_default_server_id(),
+                "count": len(results),
+                "data": convert_to_json_serializable(results),
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"SQL执行失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
 def list_tables(server_id: Optional[str] = None) -> str:
@@ -98,25 +97,22 @@ def list_tables(server_id: Optional[str] = None) -> str:
     try:
         tables = db_manager.get_tables(server_id)
 
-        return json.dumps({
-            "status": "success",
-            "server_id": server_id or get_config().get_default_server_id(),
-            "count": len(tables),
-            "tables": tables
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "server_id": server_id or get_config().get_default_server_id(),
+                "count": len(tables),
+                "tables": tables,
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"获取表列表失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
-def get_table_schema(
-    table: str,
-    server_id: Optional[str] = None
-) -> str:
+def get_table_schema(table: str, server_id: Optional[str] = None) -> str:
     """
     获取表结构
 
@@ -130,26 +126,23 @@ def get_table_schema(
     try:
         schema = db_manager.get_table_schema(table, server_id)
 
-        return json.dumps({
-            "status": "success",
-            "server_id": server_id or get_config().get_default_server_id(),
-            "table": table,
-            "schema": schema
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "server_id": server_id or get_config().get_default_server_id(),
+                "table": table,
+                "schema": schema,
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"获取表结构失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
 def read_table(
-    table: str,
-    server_id: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0
+    table: str, server_id: Optional[str] = None, limit: int = 100, offset: int = 0
 ) -> str:
     """
     读取表数据
@@ -166,22 +159,22 @@ def read_table(
     try:
         data = db_manager.get_table_data(table, server_id, limit, offset)
 
-        return json.dumps({
-            "status": "success",
-            "server_id": server_id or get_config().get_default_server_id(),
-            "table": table,
-            "count": len(data),
-            "limit": limit,
-            "offset": offset,
-            "data": convert_to_json_serializable(data)
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "server_id": server_id or get_config().get_default_server_id(),
+                "table": table,
+                "count": len(data),
+                "limit": limit,
+                "offset": offset,
+                "data": convert_to_json_serializable(data),
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"读取表数据失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
 def get_server_info() -> str:
@@ -196,15 +189,11 @@ def get_server_info() -> str:
         servers = config.list_servers()
         default = config.get_default_server_id()
 
-        return json.dumps({
-            "status": "success",
-            "servers": servers,
-            "default_server": default
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"status": "success", "servers": servers, "default_server": default},
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"获取服务器信息失败: {e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
