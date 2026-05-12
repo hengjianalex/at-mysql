@@ -56,3 +56,7 @@ config/databases.json
 # 临时文件
 *.tmp
 .temp/
+
+# Worktrees
+.worktrees/
+worktrees/
