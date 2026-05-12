@@ -6,14 +6,14 @@
 
 import os
 import json
-from pathlib import Path
 from typing import Dict, Optional, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class ServerConfig:
     """单个MySQL服务器配置"""
+
     id: str
     host: str
     port: int
@@ -29,7 +29,7 @@ class ServerConfig:
             "user": self.user,
             "password": self.password,
             "database": self.database,
-            "charset": self.charset
+            "charset": self.charset,
         }
 
 
@@ -76,7 +76,7 @@ class ConfigLoader:
         if not db_config_file.exists():
             raise FileNotFoundError(f"配置文件未找到: {db_config_file}")
 
-        with open(db_config_file, 'r', encoding='utf-8') as f:
+        with open(db_config_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         servers_data = data.get("servers", {})
@@ -88,7 +88,7 @@ class ConfigLoader:
                 user=config.get("user", ""),
                 password=config.get("password", ""),
                 database=config.get("database", ""),
-                charset=config.get("charset", "utf8mb4")
+                charset=config.get("charset", "utf8mb4"),
             )
 
         if not self.default_server_id and self.servers:
@@ -109,12 +109,7 @@ class ConfigLoader:
     def list_servers(self) -> List[dict]:
         """列出所有服务器（不包含密码）"""
         return [
-            {
-                "id": s.id,
-                "host": s.host,
-                "port": s.port,
-                "database": s.database
-            }
+            {"id": s.id, "host": s.host, "port": s.port, "database": s.database}
             for s in self.servers.values()
         ]
 

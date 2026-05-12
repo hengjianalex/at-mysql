@@ -31,7 +31,7 @@ class DBConnectionPool:
                     pool_name=pool_name,
                     pool_size=5,
                     pool_reset_session=True,
-                    **server_config.to_dict()
+                    **server_config.to_dict(),
                 )
                 logger.info(f"为服务器 {server_config.id} 创建连接池")
             except Error as e:
@@ -74,7 +74,7 @@ class DBManager:
         query: str,
         server_id: Optional[str] = None,
         params: tuple = None,
-        max_rows: int = 1000
+        max_rows: int = 1000,
     ) -> List[Dict[str, Any]]:
         """执行查询并返回字典列表"""
         server = self.config_loader.get_server(server_id)
@@ -100,9 +100,7 @@ class DBManager:
             return tables
 
     def get_table_schema(
-        self,
-        table: str,
-        server_id: Optional[str] = None
+        self, table: str, server_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """获取表结构"""
         server = self.config_loader.get_server(server_id)
@@ -117,7 +115,7 @@ class DBManager:
         table: str,
         server_id: Optional[str] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """获取表数据"""
         server = self.config_loader.get_server(server_id)

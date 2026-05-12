@@ -8,8 +8,8 @@
         "src.server"
       ],
       "env": {
-        "PYTHONPATH": "/Users/alex.tu/Documents/10 MCP/at-mysql",
-        "PROJECT_ROOT": "/Users/alex.tu/Documents/10 MCP/at-mysql"
+        "PYTHONPATH": "/Users/alex.tu/Documents/09 Agent/HRSSC_XB/at-mysql",
+        "PROJECT_ROOT": "/Users/alex.tu/Documents/09 Agent/HRSSC_XB/at-mysql"
       }
     }
   }

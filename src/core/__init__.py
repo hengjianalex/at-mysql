@@ -16,5 +16,5 @@ __all__ = [
     "path_manager",
     "DBManager",
     "DBConnectionPool",
-    "db_manager"
+    "db_manager",
 ]

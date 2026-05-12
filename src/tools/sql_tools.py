@@ -6,14 +6,12 @@ SQL工具模块
 
 import json
 import logging
-import sys
-import os
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List, Dict, Any
+from typing import Optional, Any
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from db.queries import execute_query, get_default_server_id
+from ..core.db_connection import db_manager
+from ..core.config_loader import get_config
 
 logger = logging.getLogger("mcp_agent.tools.sql")
 
@@ -66,7 +64,9 @@ def execute_sql(
         JSON格式的查询结果
     """
     try:
-        results = execute_query(query, server_id, max_rows=max_rows, params=params)
+        results = db_manager.execute_query(
+            query, server_id, max_rows=max_rows, params=params
+        )
 
         if not results:
             return json.dumps(
@@ -76,7 +76,7 @@ def execute_sql(
         return json.dumps(
             {
                 "status": "success",
-                "server_id": server_id or get_default_server_id(),
+                "server_id": server_id or get_config().get_default_server_id(),
                 "count": len(results),
                 "data": convert_to_json_serializable(results),
             },

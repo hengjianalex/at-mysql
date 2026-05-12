@@ -6,7 +6,7 @@
 
 import json
 import logging
-from typing import Any, List, Dict, Optional
+from typing import List, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ import pandas as pd
 logger = logging.getLogger("mcp_agent.tools.data")
 
 CACHED_DF: Optional[pd.DataFrame] = None
+
 
 def cache_data(data: List[Dict]) -> str:
     """
@@ -30,31 +31,28 @@ def cache_data(data: List[Dict]) -> str:
     try:
         if not data:
             CACHED_DF = None
-            return json.dumps({
-                "status": "success",
-                "message": "缓存已清空"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {"status": "success", "message": "缓存已清空"}, ensure_ascii=False
+            )
 
         CACHED_DF = pd.DataFrame(data)
-        return json.dumps({
-            "status": "success",
-            "message": f"已缓存 {len(CACHED_DF)} 条数据",
-            "columns": list(CACHED_DF.columns),
-            "count": len(CACHED_DF)
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "message": f"已缓存 {len(CACHED_DF)} 条数据",
+                "columns": list(CACHED_DF.columns),
+                "count": len(CACHED_DF),
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"数据缓存失败：{e}")
-        return json.dumps({
-            "status": "error",
-            "message": str(e)
-        }, ensure_ascii=False)
+        return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 
 def analyze_cached_data(
-    operation: str,
-    group_by: Optional[str] = None,
-    target_col: Optional[str] = None
+    operation: str, group_by: Optional[str] = None, target_col: Optional[str] = None
 ) -> str:
     """
     对缓存的数据执行 Pandas 分析
@@ -70,83 +68,124 @@ def analyze_cached_data(
     global CACHED_DF
 
     if CACHED_DF is None or CACHED_DF.empty:
-        return json.dumps({
-            "status": "error",
-            "message": "当前内存中没有已缓存的数据。请先调用 MySQL_OB 或 MySQL_Yifei 查询数据。"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "error",
+                "message": "当前内存中没有已缓存的数据。请先调用 MySQL_OB 或 MySQL_Yifei 查询数据。",
+            },
+            ensure_ascii=False,
+        )
 
     try:
-        if operation == 'status':
-            return json.dumps({
-                "status": "success",
-                "cached": True,
-                "count": len(CACHED_DF),
-                "columns": list(CACHED_DF.columns)
-            }, ensure_ascii=False)
+        if operation == "status":
+            return json.dumps(
+                {
+                    "status": "success",
+                    "cached": True,
+                    "count": len(CACHED_DF),
+                    "columns": list(CACHED_DF.columns),
+                },
+                ensure_ascii=False,
+            )
 
-        elif operation == 'describe':
-            result = CACHED_DF.describe(include='all')
+        elif operation == "describe":
+            result = CACHED_DF.describe(include="all")
             res = result.to_csv()
 
-        elif operation == 'value_counts' and group_by:
+        elif operation == "value_counts" and group_by:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
             res = CACHED_DF[group_by].value_counts().reset_index().to_csv(index=False)
 
-        elif operation == 'count' and group_by:
+        elif operation == "count" and group_by:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
-            res = CACHED_DF.groupby(group_by).size().reset_index(name='count').to_csv(index=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
+            res = (
+                CACHED_DF.groupby(group_by)
+                .size()
+                .reset_index(name="count")
+                .to_csv(index=False)
+            )
 
-        elif operation in ['sum', 'mean'] and group_by and target_col:
+        elif operation in ["sum", "mean"] and group_by and target_col:
             if group_by not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"分组字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"分组字段 '{group_by}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
             if target_col not in CACHED_DF.columns:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"目标字段 '{target_col}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}"
-                }, ensure_ascii=False)
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"目标字段 '{target_col}' 不存在于数据中。可用字段：{list(CACHED_DF.columns)}",
+                    },
+                    ensure_ascii=False,
+                )
 
-            CACHED_DF[target_col] = pd.to_numeric(CACHED_DF[target_col], errors='coerce')
-            if operation == 'sum':
-                res = CACHED_DF.groupby(group_by)[target_col].sum().reset_index().to_csv(index=False)
+            CACHED_DF[target_col] = pd.to_numeric(
+                CACHED_DF[target_col], errors="coerce"
+            )
+            if operation == "sum":
+                res = (
+                    CACHED_DF.groupby(group_by)[target_col]
+                    .sum()
+                    .reset_index()
+                    .to_csv(index=False)
+                )
             else:
-                res = CACHED_DF.groupby(group_by)[target_col].mean().reset_index().to_csv(index=False)
+                res = (
+                    CACHED_DF.groupby(group_by)[target_col]
+                    .mean()
+                    .reset_index()
+                    .to_csv(index=False)
+                )
 
         else:
-            return json.dumps({
-                "status": "error",
-                "message": f"未知的操作类型 '{operation}' 或参数缺失。对于 sum/mean 需要同时指定 group_by 和 target_col。"
-            }, ensure_ascii=False)
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": f"未知的操作类型 '{operation}' 或参数缺失。对于 sum/mean 需要同时指定 group_by 和 target_col。",
+                },
+                ensure_ascii=False,
+            )
 
-        return json.dumps({
-            "status": "success",
-            "operation": operation,
-            "data_count": len(CACHED_DF),
-            "result": res
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "status": "success",
+                "operation": operation,
+                "data_count": len(CACHED_DF),
+                "result": res,
+            },
+            ensure_ascii=False,
+        )
 
     except Exception as e:
         logger.error(f"数据分析执行异常：{e}")
-        return json.dumps({
-            "status": "error",
-            "message": f"分析执行异常：{str(e)}"
-        }, ensure_ascii=False)
+        return json.dumps(
+            {"status": "error", "message": f"分析执行异常：{str(e)}"},
+            ensure_ascii=False,
+        )
 
 
 def enrich_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     数据富化引擎：从身份证号自动衍生年龄、性别、出生日期等特征
-    
+
     数据源：
     - id_number: 18 位身份证号 -> 提取出生日期、年龄、性别
 
@@ -162,15 +201,16 @@ def enrich_derived_features(df: pd.DataFrame) -> pd.DataFrame:
     now = pd.Timestamp.now()
 
     # 处理身份证号 -> 提取出生日期、年龄、性别
-    if 'id_number' in df.columns:
+    if "id_number" in df.columns:
+
         def extract_birth_date(id_num):
             """从身份证号提取出生日期（第 7-14 位）"""
             if pd.isna(id_num) or len(str(id_num)) < 14:
                 return None
             try:
                 birth_str = str(id_num)[6:14]
-                return pd.to_datetime(birth_str, format='%Y%m%d', errors='coerce')
-            except:
+                return pd.to_datetime(birth_str, format="%Y%m%d", errors="coerce")
+            except Exception:
                 return None
 
         def calculate_age(birth_date):
@@ -186,37 +226,63 @@ def enrich_derived_features(df: pd.DataFrame) -> pd.DataFrame:
             try:
                 gender_digit = str(id_num)[16]
                 if gender_digit.isdigit():
-                    return '男' if int(gender_digit) % 2 == 1 else '女'
+                    return "男" if int(gender_digit) % 2 == 1 else "女"
                 return None
-            except:
+            except Exception:
                 return None
 
-        df['birth_date_from_id'] = df['id_number'].apply(extract_birth_date)
-        df['age'] = df['birth_date_from_id'].apply(calculate_age)
-        df['gender'] = df['id_number'].apply(extract_gender)
-    
+        df["birth_date_from_id"] = df["id_number"].apply(extract_birth_date)
+        df["age"] = df["birth_date_from_id"].apply(calculate_age)
+        df["gender"] = df["id_number"].apply(extract_gender)
+
     return df
+
 
 def mask_sensitive_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     根据业务规则对敏感字段进行脱敏
     """
-    if df.empty: return df
-    
+    if df.empty:
+        return df
+
     # 字段归类
-    names = ['emp_name', 'full_name', 'user_point_name']
-    ids = ['id_number']
-    mobiles = ['mobile', 'phone']
-    companies = ['customer_name', 'account_name', 'social_security_entity', 
-                 'merchant_name', 'social_account_name', 'agent_name']
+    names = ["emp_name", "full_name", "user_point_name"]
+    ids = ["id_number"]
+    mobiles = ["mobile", "phone"]
+    companies = [
+        "customer_name",
+        "account_name",
+        "social_security_entity",
+        "merchant_name",
+        "social_account_name",
+        "agent_name",
+    ]
 
     for col in df.columns:
         if col in names:
-            df[col] = df[col].apply(lambda x: str(x)[0] + "*" + str(x)[2:] if pd.notna(x) and len(str(x)) > 1 else x)
+            df[col] = df[col].apply(
+                lambda x: str(x)[0] + "*" + str(x)[2:]
+                if pd.notna(x) and len(str(x)) > 1
+                else x
+            )
         elif col in ids:
-            df[col] = df[col].apply(lambda x: str(x)[:6] + "*" * 11 + str(x)[-1:] if pd.notna(x) and len(str(x)) >= 15 else x)
+            df[col] = df[col].apply(
+                lambda x: str(x)[:6] + "*" * 11 + str(x)[-1:]
+                if pd.notna(x) and len(str(x)) >= 15
+                else x
+            )
         elif col in mobiles:
-            df[col] = df[col].apply(lambda x: str(x)[:3] + "****" + str(x)[-4:] if pd.notna(x) and len(str(x)) >= 11 else x)
+            df[col] = df[col].apply(
+                lambda x: str(x)[:3] + "****" + str(x)[-4:]
+                if pd.notna(x) and len(str(x)) >= 11
+                else x
+            )
         elif col in companies:
-            df[col] = df[col].apply(lambda x: ("*" * 6 + str(x)[6:] if len(str(x)) > 6 else "****" + str(x)[4:]) if pd.notna(x) else x)
+            df[col] = df[col].apply(
+                lambda x: (
+                    "*" * 6 + str(x)[6:] if len(str(x)) > 6 else "****" + str(x)[4:]
+                )
+                if pd.notna(x)
+                else x
+            )
     return df

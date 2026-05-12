@@ -8,23 +8,9 @@ import logging
 import sys
 import json
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from typing import Optional
 
-
-def convert_decimal(obj):
-    """递归将 Decimal 和 datetime 转换为可序列化的格式"""
-    from decimal import Decimal
-
-    if isinstance(obj, Decimal):
-        return float(obj)
-    elif isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    elif isinstance(obj, dict):
-        return {k: convert_decimal(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_decimal(item) for item in obj]
-    return obj
+import pandas as pd
 
 
 from mcp.server.fastmcp import FastMCP
@@ -39,6 +25,7 @@ from .tools import (
     enrich_derived_features,
     mask_sensitive_data as mask_sensitive_data_impl,
 )
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -96,7 +83,6 @@ async def analyze_cached_data(
     """
     # 直接导入并使用底层实现
     from .tools.data_tools import CACHED_DF
-    import numpy as np
 
     if CACHED_DF is None or CACHED_DF.empty:
         return json.dumps(
@@ -298,7 +284,7 @@ async def MySQL_OB(query: str, max_rows: int = 10000) -> str:
                     ensure_ascii=False,
                     indent=2,
                 )
-        except:
+        except Exception:
             return result
 
 
@@ -387,7 +373,7 @@ async def MySQL_Yifei(query: str, max_rows: int = 10000) -> str:
                     ensure_ascii=False,
                     indent=2,
                 )
-        except:
+        except Exception:
             return result
 
 
@@ -430,47 +416,6 @@ async def read_table(
     return read_table_impl(table=table, server_id=server_id, limit=limit, offset=offset)
 
 
-@mcp.tool()
-async def account_bill_download(company_name: str, cost_time: str) -> str:
-    """
-    下载指定公司在指定月份的社保账单明细 Excel 文件。
-
-    Args:
-        company_name: 客户公司核心名称。
-            注意：请提取用户提到的公司主体，去掉"公司"、"有限公司"、"集团"等后缀。
-            示例：用户说"三好公司"，此处应输入"三好"；用户说"阿里巴巴集团"，此处输入"阿里巴巴"。
-        cost_time: 账单查询月份。
-            格式要求：必须为 YYYY-MM 格式。
-            示例：用户说"2026 年 3 月"或"3 月"，请转化为"2026-03"；用户说"去年 12 月"，请转化为"2025-12"。
-
-    Returns:
-        JSON 格式的账单生成结果
-    """
-    return download_account_bill(company_name=company_name, cost_time=cost_time)
-
-
-@mcp.tool()
-async def social_policy_calculate(
-    city_name: str, account_name: Optional[str] = None, simulate_type: str = "synth"
-) -> str:
-    """
-    城市社保明成本明细测算，计算指定城市、社保账户(可选）的社保明细。
-
-    Args:
-        city_name: 城市名称（需要测算的城市，例如"北京"、"上海"等）。
-        account_name: 社保账户名称（可选）。
-
-    Returns:
-        JSON 格式的账单生成结果
-    """
-
-    return social_details_calculate(
-        city_name=city_name,
-        account_name=account_name,
-        simulate_type=simulate_type,
-    )
-
-
 @mcp.resource("mysql://{server_id}/{database}/{table}")
 async def get_table_resource(server_id: str, database: str, table: str) -> str:
     """
@@ -510,7 +455,7 @@ def main():
     """主入口"""
     config = get_config()
 
-    print(f"MCP MySQL Excel Server (FastMCP) 启动中...", file=sys.stderr)
+    print("MCP MySQL Excel Server (FastMCP) 启动中...", file=sys.stderr)
     print(f"项目目录: {path_manager.project_root}", file=sys.stderr)
     print(f"输出目录: {path_manager.output_dir}", file=sys.stderr)
 

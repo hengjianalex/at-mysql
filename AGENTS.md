@@ -4,89 +4,48 @@ This file provides guidelines for AI agents working in this repository.
 
 ## Project Overview
 
-- **Project Name**: at-mysql
-- **Type**: Python MCP Server (Model Context Protocol)
-- **Purpose**: Provides MySQL query and Excel export tools via MCP protocol
-- **Main Entry**: `src/server.py`
-- **Runtime**: Python 3.x with FastMCP
+- **Name**: at-mysql - Python MCP Server (Model Context Protocol)
+- **Purpose**: MySQL query, Excel export, and data analysis tools via MCP protocol
+- **Entry**: `src/server.py` | **Runtime**: Python 3.x with FastMCP
 
 ## Build/Lint/Test Commands
-
-### Running the MCP Server
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the server (stdio mode for MCP)
+# Run MCP server (stdio mode)
 python -m src.server
 
-# Or via FastMCP CLI
-fastmcp run src.server: mcp
-```
+# Run tests
+pytest tests/                    # All tests
+pytest tests/test_file.py::test_name  # Single test
+pytest -v                        # Verbose
 
-### Running Tests
-
-Currently **no test suite exists**. If adding tests:
-
-```bash
-# Using pytest (recommended)
-pytest tests/                    # Run all tests
-pytest tests/test_file.py::test_name  # Run single test
-pytest -v                        # Verbose output
-
-# Using unittest
-python -m unittest discover -s tests
-```
-
-### Linting
-
-```bash
-# Python linting with ruff (recommended)
+# Lint with ruff (project standard)
 ruff check src/
+ruff check src/ --fix           # Auto-fix
+ruff format src/                # Format
 
-# With auto-fix
-ruff check src/ --fix
-
-# Type checking with mypy
-mypy src/
-
-# Format code with black
-black src/
-```
-
-### Code Quality Commands
-
-```bash
-# Full check
-ruff check src/ && mypy src/
-
-# Format check
-black --check src/
+# Full quality check
+ruff check src/ && ruff format --check src/
 ```
 
 ## Code Style Guidelines
 
 ### General Principles
 
-- Write clean, readable code with clear intent
-- Use type hints for all function signatures
-- Add docstrings to all public functions (Chinese or English)
+- Type hints for all function signatures
+- Docstrings on all public functions (Chinese or English)
 - Keep functions focused and single-purpose
-- Maximum line length: 100 characters
+- **Max line length**: 88 characters (ruff default)
 
-### Imports
+### Imports (3 sections, blank line between)
 
-**Order** (each section separated by blank line):
-1. Standard library
-2. Third-party packages
-3. Local application imports
+1. Standard library (`json`, `logging`, `datetime`)
+2. Third-party packages (`pandas`, `mysql.connector`)
+3. Local application imports (relative: `from ..core import db_manager`)
 
-**Relative vs Absolute**:
-- Use relative imports within the package: `from ..core import db_manager`
-- Use absolute imports for external packages: `import pandas as pd`
-
-**Example**:
 ```python
 import json
 import logging
@@ -97,7 +56,6 @@ import pandas as pd
 from mysql.connector import pooling, Error
 
 from ..core.db_connection import db_manager
-from ..core.config_loader import get_config
 ```
 
 ### Naming Conventions
@@ -106,179 +64,102 @@ from ..core.config_loader import get_config
 |---------|------------|---------|
 | Modules | snake_case | `sql_tools.py` |
 | Classes | PascalCase | `DBConnectionPool` |
-| Functions | snake_case | `execute_sql()` |
-| Variables | snake_case | `max_rows` |
+| Functions/vars | snake_case | `execute_sql()` |
 | Constants | UPPER_SNAKE | `MAX_ROWS_LIMIT` |
-| Private members | prefix with `_` | `_internal_method()` |
+| Private members | _prefix | `_initialized` |
 
-### Type Hints
+### Type Hints & Docstrings
 
-**Always use type hints for function signatures**:
 ```python
-# Good
-def execute_sql(query: str, server_id: Optional[str] = None, max_rows: int = 1000) -> str:
-    ...
+from dataclasses import dataclass
+from typing import Optional
 
-# Avoid
-def execute_sql(query, server_id=None, max_rows=1000):
-    ...
-```
+@dataclass
+class ServerConfig:
+    id: str
+    host: str
+    port: int
+    user: str
+    password: str
+    database: str
+    charset: str = "utf8mb4"
 
-**Common type imports**:
-```python
-from typing import Optional, List, Dict, Any, Union, Tuple
-```
-
-### Docstrings
-
-Use Google-style or simple docstrings:
-```python
-def execute_sql(query: str, server_id: Optional[str] = None) -> str:
+def execute_sql(
+    query: str,
+    server_id: Optional[str] = None,
+    max_rows: int = 1000,
+) -> str:
     """
-    执行SQL查询并返回JSON结果
+    Execute SQL query and return JSON results.
 
     Args:
-        query: SQL查询语句
-        server_id: 服务器ID（可选）
+        query: SQL query statement
+        server_id: Server ID (optional)
+        max_rows: Maximum rows to return
 
     Returns:
-        JSON格式的查询结果
+        JSON formatted query results
     """
 ```
 
 ### Error Handling
 
-**Always use try/except for external operations**:
+- **Never** use bare `except:`
+- Catch specific exceptions (`Error`, `ValueError`)
+- Log with `logging.getLogger(__name__)`
+- Return JSON error responses for MCP tools
+
 ```python
 try:
-    results = db_manager.execute_query(query, server_id)
-    return json.dumps({"status": "success", "data": results})
+    result = db_manager.execute_query(query, server_id)
+    return json.dumps({"status": "success", "data": result})
 except Error as e:
-    logger.error(f"查询失败: {e}")
+    logger.error(f"Database error: {e}")
     return json.dumps({"status": "error", "message": str(e)})
 ```
-
-**Rules**:
-- Never let exceptions propagate silently
-- Log errors before returning
-- Return error status in JSON, don't raise
-- Use specific exception types when possible
-
-### JSON Responses
-
-**Always use `ensure_ascii=False`** for Chinese support:
-```python
-return json.dumps({
-    "status": "success",
-    "message": "操作成功",
-    "data": results
-}, ensure_ascii=False, indent=2)
-```
-
-### Logging
-
-**Use module-level loggers**:
-```python
-logger = logging.getLogger(__name__)
-
-# Or with prefix
-logger = logging.getLogger("mcp_agent.tools.sql")
-```
-
-**Log levels**:
-- `logger.debug()` - Detailed diagnostic info
-- `logger.info()` - General operational events
-- `logger.warning()` - Unexpected but handled issues
-- `logger.error()` - Serious problems
-
-### Database Operations
-
-- Use connection pooling (`DBConnectionPool`)
-- Always use context managers for connections
-- Limit query results with `max_rows` parameter
-- Close connections in finally blocks
-
-### Pandas Usage
-
-- Use vectorized operations over loops
-- Handle empty DataFrame cases
-- Return meaningful error messages
-- Use `to_dict('records')` for JSON conversion
-
-### File Operations
-
-- Use context managers (`with open(...) as f:`)
-- Handle encoding explicitly (UTF-8)
-- Close files even on errors
-
-### Async/Await
-
-- Use `async def` for MCP tool functions
-- Keep async operations non-blocking
-- Use `asyncio` for concurrent operations when needed
 
 ## Project Structure
 
 ```
 at-mysql/
 ├── src/
-│   ├── server.py          # Main MCP server entry
-│   ├── core/
-│   │   ├── db_connection.py   # Database connection pool
-│   │   ├── config_loader.py   # Configuration management
-│   │   └── path_manager.py    # Path utilities
-│   └── tools/
-│       ├── sql_tools.py       # SQL execution tools
-│       ├── data_tools.py      # Data processing tools
-│       ├── excel_writer.py    # Excel export tools
-│       └── ...
+│   ├── server.py          # MCP server main entry
+│   ├── core/              # Core functionality
+│   │   ├── config_loader.py    # JSON config loading
+│   │   ├── db_connection.py    # Connection pool + query execution
+│   │   └── path_manager.py     # Path utilities
+│   └── tools/             # MCP tools
+│       ├── sql_tools.py   # SQL execution tools
+│       └── data_tools.py  # Data analysis tools
 ├── config/
-│   └── databases.json     # Database configurations
-└── requirements.txt       # Python dependencies
+│   ├── .env
+│   ├── databases.example.json
+│   └── databases.json     # Sensitive - do not commit
+├── requirements.txt
+└── MCPconfig.json
 ```
 
 ## Configuration
 
-Database configurations are stored in `config/databases.json`:
-- Never commit actual credentials
-- Use `databases.example.json` as template
-- Environment variables take precedence
+- **DB configs**: `config/databases.json` (git-ignored, see `databases.example.json`)
+- **Server IDs**: `YIFEI`, `YUNYAN_OB`
+- **Env var**: `DEFAULT_SERVER` in `config/.env`
 
-## Common Patterns
+## MCP Tools
 
-### MCP Tool Definition
-```python
-@mcp.tool()
-async def tool_name(param: str) -> str:
-    """Tool description"""
-    try:
-        # Implementation
-        return json.dumps({"status": "success", ...})
-    except Exception as e:
-        logger.error(...)
-        return json.dumps({"status": "error", ...})
-```
+| Tool | Purpose |
+|------|---------|
+| `MySQL_Yifei` | Query YIFEI server |
+| `MySQL_OB` | Query YUNYAN_OB server |
+| `list_tables` | List all tables |
+| `get_table_schema` | Get table column info |
+| `read_table` | Read table with pagination |
+| `get_current_datetime` | Get current date/time |
+| `analyze_cached_data` | Analyze cached query results |
 
-### Database Query
-```python
-from ..core.db_connection import db_manager
+## Security Guidelines
 
-results = db_manager.execute_query(query, server_id, max_rows=1000)
-```
-
-### Returning JSON
-```python
-import json
-
-return json.dumps({
-    "key": "value"
-}, ensure_ascii=False, indent=2)
-```
-
-## Important Notes
-
-1. **No existing tests** - Add tests when modifying code
-2. **MCP protocol** - All tools must use `@mcp.tool()` decorator
-3. **String returns** - MCP tools return JSON strings, not Python objects
-4. **Chinese support** - Always use `ensure_ascii=False` for JSON
-5. **Connection pooling** - Don't create new connections; use pool
+1. **Never commit secrets**: `config/databases.json` is git-ignored
+2. **Use parameterized queries**: Prevent SQL injection
+3. **Handle errors gracefully**: Don't expose internal details
+4. **Mask sensitive data**: Use `mask_sensitive_data()` for exports
