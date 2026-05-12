@@ -17,7 +17,10 @@ logger = logging.getLogger("mcp_agent.db.queries")
 
 
 def execute_query(
-    query: str, server_id: Optional[str] = None, max_rows: int = 1000
+    query: str,
+    server_id: Optional[str] = None,
+    max_rows: int = 1000,
+    params: Optional[tuple] = None,
 ) -> List[Dict[str, Any]]:
     """
     执行 SQL 查询并返回字典列表
@@ -26,11 +29,12 @@ def execute_query(
         query: SQL 查询语句
         server_id: 服务器 ID（可选）
         max_rows: 最大返回行数
+        params: 查询参数元组
 
     Returns:
         查询结果字典列表
     """
-    return db_manager.execute_query(query, server_id, max_rows=max_rows)
+    return db_manager.execute_query(query, server_id, max_rows=max_rows, params=params)
 
 
 def execute_query_raw(

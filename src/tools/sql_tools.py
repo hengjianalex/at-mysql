@@ -48,7 +48,10 @@ def convert_to_json_serializable(data: Any) -> Any:
 
 
 def execute_sql(
-    query: str, server_id: Optional[str] = None, max_rows: int = 1000
+    query: str,
+    server_id: Optional[str] = None,
+    max_rows: int = 1000,
+    params: Optional[tuple] = None,
 ) -> str:
     """
     执行SQL查询并返回JSON结果
@@ -57,12 +60,13 @@ def execute_sql(
         query: SQL查询语句
         server_id: 服务器ID（可选）
         max_rows: 最大返回行数
+        params: 查询参数元组
 
     Returns:
         JSON格式的查询结果
     """
     try:
-        results = execute_query(query, server_id, max_rows=max_rows)
+        results = execute_query(query, server_id, max_rows=max_rows, params=params)
 
         if not results:
             return json.dumps(
