@@ -133,15 +133,16 @@ at-mysql/
 │       └── data_tools.py  # Data analysis tools
 ├── config/
 │   ├── .env
-│   ├── databases.example.json
-│   └── databases.json     # Sensitive - do not commit
+│   └── databases.example.json
+├── tests/
 ├── requirements.txt
+├── AGENTS.md
 └── MCPconfig.json
 ```
 
 ## Configuration
 
-- **DB configs**: `config/databases.json` (git-ignored, see `databases.example.json`)
+- **DB configs**: 创建 `config/databases.json` (参考 `databases.example.json`)
 - **Server IDs**: `YIFEI`, `YUNYAN_OB`
 - **Env var**: `DEFAULT_SERVER` in `config/.env`
 
